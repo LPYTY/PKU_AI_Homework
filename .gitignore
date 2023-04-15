@@ -1,10 +1,13 @@
 # Project Specific
 bin/
 build/
+out/
 .clang-format
 .xmake
 .cache
 compile_commands.json
+CMakeSettings.json
+token.txt
 
 # Third-parties
 /includes/
@@ -12,6 +15,7 @@ compile_commands.json
 
 # IDE
 .vscode/
+.vs/
 
 # Prerequisites
 *.d
