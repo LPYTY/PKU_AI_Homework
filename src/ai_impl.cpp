@@ -1,8 +1,8 @@
 #include "ai_impl.h"
 
-AIInterface::AIInterface(const char* token)
+AIInterface::AIInterface(const string& token)
 {
-	create(token);
+	create(token.c_str());
 	//aiInterface = nullptr;
 }
 
@@ -56,14 +56,9 @@ AIInterface::~AIInterface()
 		ai_free(aiInterface);
 }
 
-AIBase::AIBase(const char* token, const char* request, const char* fileName)
-	:aiInterface{ token }, request_str{ request }, toConsole{ false }
-{
-}
-
 void AIBase::sendRequest()
 {
-	aiInterface.send(type(), request_str.c_str());
+	aiInterface.send(type(), request.c_str());
 }
 
 void AIBase::showResponse()
@@ -71,7 +66,11 @@ void AIBase::showResponse()
 	Buffer buffer = getResultData();
 	int status = aiInterface.status();
 	if (status == 0)
+	{
+		if(fileName)
+			openFile(*fileName);
 		doNormalOutput(buffer);
+	}
 	else
 		doErrorOutput(buffer);
 }
@@ -88,8 +87,7 @@ Buffer AIBase::getResultData()
 
 void AIBase::doErrorOutput(const Buffer& errorMsg)
 {
-	std::cerr << errorMsg.data();
-	exit(aiInterface.status());
+	errorExit(string(errorMsg.data(), errorMsg.size()), aiInterface.status());
 }
 
 Buffer::Buffer(const Buffer& rhs)
@@ -158,11 +156,9 @@ void Buffer::reAllocate(int newSize)
 	length = newSize;
 }
 
-ChatAI::ChatAI(const char* token, const char* request, const char* fileName)
-	:AIBase(token, request, fileName)
+void ChatAI::attachFile(const string& fileName)
 {
-	if (!openFile(fileName))
-		exit(-1);
+	this->fileName = fileName;
 }
 
 int ChatAI::type()
@@ -170,10 +166,11 @@ int ChatAI::type()
 	return AI_TYPE_CHAT;
 }
 
-bool ChatAI::openFile(const char* fileName)
+void ChatAI::openFile(const string& fileName)
 {
 	outputFile.open(fileName);
-	return outputFile.is_open();
+	if (!outputFile.is_open())
+		errorExit("Open file failed", FILE_ERROR);
 }
 
 bool ChatAI::isResultString()
@@ -183,17 +180,10 @@ bool ChatAI::isResultString()
 
 void ChatAI::doNormalOutput(const Buffer& data)
 {
-	if (toConsole)
+	if (!fileName)
 		std::cout << data.data();
 	else
 		outputFile << data.data();
-}
-
-MathAI::MathAI(const char* token, const char* request, const char* fileName)
-	:AIBase(token, request, fileName)
-{
-	if (!openFile(fileName))
-		exit(-1);
 }
 
 int MathAI::type()
@@ -201,10 +191,11 @@ int MathAI::type()
 	return AI_TYPE_WOLFRAM;
 }
 
-bool MathAI::openFile(const char* fileName)
+void MathAI::openFile(const string& fileName)
 {
 	outputFile.open(fileName, ios::binary);
-	return outputFile.is_open();
+	if(!outputFile.is_open())
+		errorExit("Open file failed", FILE_ERROR);
 }
 
 void MathAI::doNormalOutput(const Buffer& data)
@@ -212,22 +203,16 @@ void MathAI::doNormalOutput(const Buffer& data)
 	outputFile.write(data.data(), data.size());
 }
 
-DrawAI::DrawAI(const char* token, const char* request, const char* fileName)
-	:AIBase(token, request, fileName)
-{
-	if (!openFile(fileName))
-		exit(-1);
-}
-
 int DrawAI::type()
 {
 	return AI_TYPE_DRAW;
 }
 
-bool DrawAI::openFile(const char* fileName)
+void DrawAI::openFile(const string& fileName)
 {
 	outputFile.open(fileName, ios::binary);
-	return outputFile.is_open();
+	if (!outputFile.is_open())
+		errorExit("Open file failed", FILE_ERROR);
 }
 
 void DrawAI::doNormalOutput(const Buffer& data)

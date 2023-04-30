@@ -1,17 +1,21 @@
 #ifndef AI_IMPL_H
 #define AI_IMPL_H
 
-#include "ai.h"
+#include "./ai.h"
+#include "./error.h"
+
 #include <rjsjai.h>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
 #include <stdexcept>
+#include <optional>
 
 using std::string;
 using std::ofstream;
 using std::ios;
+using std::optional;
 
 constexpr char myToken[] = "fa501f56-34ac-410e-90f0-deeca8b0629c";
 
@@ -38,7 +42,7 @@ class AIInterface
 {
 	RJSJAI* aiInterface;
 public:
-	AIInterface(const char* token);
+	AIInterface(const string& token);
 	AIInterface(const AIInterface&) = delete;
 	AIInterface(AIInterface&& rhs);
 	AIInterface& operator=(const AIInterface&) = delete;
@@ -55,19 +59,21 @@ class AIBase
 	:public AI
 {
 	AIInterface aiInterface;
-	string request_str;
+	string request;
 protected:
+	optional<string> fileName;
 	ofstream outputFile;
 	bool toConsole;
 public:
-	AIBase(const char* token, const char* request)
-		:aiInterface{ token }, request_str{ request }, toConsole{ true } {}
-	AIBase(const char* token, const char* request, const char* fileName);
+	AIBase(const char* token, const string& request)
+		:aiInterface{ token }, request{ request } {}
+	AIBase(const char* token, const string& request, const string& fileName)
+		:aiInterface{ token }, request{ request }, fileName{ fileName } {}
 	void sendRequest() override;
 	void showResponse() override;
 protected:
 	virtual int type() = 0;
-	virtual bool openFile(const char* fileName) = 0;
+	virtual void openFile(const string& fileName) = 0;
 	virtual bool isResultString();
 	virtual Buffer getResultData();
 	virtual void doNormalOutput(const Buffer& data) = 0;
@@ -79,10 +85,10 @@ class ChatAI
 {
 public:
 	using AIBase::AIBase;
-	ChatAI(const char* token, const char* request, const char* fileName);
+	void attachFile(const string& fileName);
 protected:
 	int type() override;
-	bool openFile(const char* fileName) override;
+	void openFile(const string& fileName) override;
 	bool isResultString() override;
 	void doNormalOutput(const Buffer& data) override;
 };
@@ -91,10 +97,10 @@ class MathAI
 	:public AIBase
 {
 public:
-	MathAI(const char* token, const char* request, const char* fileName);
+	using AIBase::AIBase;
 protected:
 	int type() override;
-	bool openFile(const char* fileName) override;
+	void openFile(const string& fileName) override;
 	void doNormalOutput(const Buffer& data) override;
 };
 
@@ -102,10 +108,10 @@ class DrawAI
 	:public AIBase
 {
 public:
-	DrawAI(const char* token, const char* request, const char* fileName);
+	using AIBase::AIBase;
 protected:
 	int type() override;
-	bool openFile(const char* fileName) override;
+	void openFile(const string& fileName) override;
 	void doNormalOutput(const Buffer& data) override;
 };
 

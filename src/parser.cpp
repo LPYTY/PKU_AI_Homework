@@ -1,68 +1,119 @@
-#include "parser.h"
+#include "./parser.h"
+
+bool Parser::isCommand(const string& str)
+{
+	return str.size() >= 2 && str[0] == '-';
+}
 
 Parser::Parser(int argc, char** argv)
-	:argCount{ argc }, argValue{ argv }
+	:parsedCount{ 0 }
 {
+	for (int i = 1; i < argc; i++)
+		args.push_back(argv[i]);
 }
 
 AI* Parser::doParse()
 {
+	parsedCount = 0;
 	using namespace std::literals;
-	for (int i = 1; i < argCount; i++)
+	optional<Command> AIType;
+	string stringToSend;
+	optional<string> fileName;
+	while(nextArgExists())
 	{
-		if (argValue[i][0] != '-')
-			error("Too many arguments"s, -2);
-		i++;
-		if (i >= argCount || argValue[i][0] == ' ')
-			error("Too few arguments"s, -3);
-		argTable[argValue[i - 1]] = argValue[i];
-	}
-	if (argTable.size() > 2)
-		error("Too many commands"s, -4);
-	bool outputFileSet = false;
-	string fileName;
-	if (argTable.find("-o") != argTable.end())
-	{
-		outputFileSet = true;
-		fileName = argTable["-o"];
-	}
-	if (argTable.find("--output") != argTable.end())
-	{
-		outputFileSet = true;
-		fileName = argTable["--output"];
-	}
-	if (argTable.find("--chat"s) != argTable.end())
-	{
-		if (!outputFileSet)
+		vector<Command> expectedCommands;
+		if (!AIType)
 		{
-			if (argTable.size() > 1)
-				error("Too many commands"s, -4);
-			return new ChatAI(myToken, argTable["--chat"s].c_str());
+			expectedCommands = { Command::CHAT, Command::DRAW, Command::MATH };
 		}
-		else
-			return new ChatAI(myToken, argTable["--chat"s].c_str(), fileName.c_str());
+		if (!fileName)
+		{
+			expectedCommands.push_back(Command::OUTPUT);
+		}
+		Command currentCommand = parseCommand(expectedCommands);
+		switch (currentCommand)
+		{
+		case Command::CHAT:
+		case Command::DRAW:
+		case Command::MATH:
+			if (AIType)
+				errorExit("Too many commands", TOO_MANY_COMMAND);
+			stringToSend = parseString();
+			AIType = currentCommand;
+			break;
+		case Command::OUTPUT:
+			if (fileName)
+				errorExit("Too many commands", TOO_MANY_COMMAND);
+			fileName = parseString();
+			break;
+		default:
+			break;
+		}
 	}
-	else if (argTable.find("--draw"s) != argTable.end())
+	if (!AIType)
+		errorExit("AI type not specified", TOO_FEW_ARGUMENTS);
+	switch (*AIType)
 	{
-		if (!outputFileSet)
-			error("Output file not set"s, -5);
-		return new DrawAI(myToken, argTable["--draw"s].c_str(), fileName.c_str());
-	}
-	else if (argTable.find("--math"s) != argTable.end())
+	case Command::CHAT:
 	{
-		if (!outputFileSet)
-			error("Output file not set"s, -5);
-		return new MathAI(myToken, argTable["--math"s].c_str(), fileName.c_str());
+		ChatAI* ai = new ChatAI(myToken, stringToSend);
+		if (fileName)
+			ai->attachFile(fileName->c_str());
+		return ai;
 	}
-	else
-		error("Command expected"s, -6);
+	case Command::DRAW:
+		if (!fileName)
+			errorExit("Output file not specified", TOO_FEW_ARGUMENTS);
+		return new DrawAI(myToken, stringToSend, *fileName);
+	case Command::MATH:
+		if (!fileName)
+			errorExit("Output file not specified", TOO_FEW_ARGUMENTS);
+		return new MathAI(myToken, stringToSend, *fileName);
+	default:
+		break;
+	}
+	return nullptr;
 }
 
-void Parser::error(const string& errorMsg, int exitCode)
+bool Parser::nextArgExists()
 {
-	fprintf(stderr, errorMsg.c_str());
-	fflush(stderr);
-	exit(exitCode);
+	return parsedCount < args.size();
+}
+
+void Parser::assertNextArgExists()
+{
+	using namespace std::literals;
+	if (parsedCount >= args.size())
+		errorExit("More arguments expected"s, TOO_FEW_ARGUMENTS);
+}
+
+Command Parser::parseCommand(const vector<Command>& expectedCommands)
+{
+	assertNextArgExists();
+	using namespace std::literals;
+	const string& cmd = args[parsedCount];
+	parsedCount++;
+	if (!isCommand(cmd))
+	{
+		errorExit("Command expected"s, COMMAND_EXPECTED);
+	}
+	auto iter = commandTable.find(cmd);
+	if (iter == commandTable.end())
+		errorExit("Unknown command"s, UNKNOWN_COMMAND);
+	if (std::find(expectedCommands.begin(), expectedCommands.end(), iter->second) == expectedCommands.end())
+		errorExit("Unexpected command"s, UNEXPECTED_COMMAND);
+	return iter->second;
+}
+
+string Parser::parseString()
+{
+	assertNextArgExists();
+	using namespace std::literals;
+	const string& str = args[parsedCount];
+	parsedCount++;
+	if (isCommand(str))
+		errorExit("Argument expected", TOO_FEW_ARGUMENTS);
+	return str;
 }
 
 AI* Parser::parse(int argc, char** argv)
@@ -70,3 +121,12 @@ AI* Parser::parse(int argc, char** argv)
 	Parser parser(argc, argv);
 	return parser.doParse();
 }
+
+unordered_map<string, Command> Parser::commandTable =
+{
+	std::make_pair("--chat", Command::CHAT),
+	std::make_pair("--draw", Command::DRAW),
+	std::make_pair("--math", Command::MATH),
+	std::make_pair("--output", Command::OUTPUT),
+	std::make_pair("-o", Command::OUTPUT),
+};
