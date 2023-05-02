@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <algorithm>
 
 using std::unordered_map;
 using std::string;
